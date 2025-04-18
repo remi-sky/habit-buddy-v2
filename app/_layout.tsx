@@ -15,6 +15,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 console.log("✅ Root layout rendering...");
@@ -39,6 +40,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="gpt-test" options={{ title: 'GPT Test' }} />
+        <Stack.Screen name="goal-chat" options={{ title: 'Goal Chat' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
