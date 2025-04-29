@@ -1,71 +1,136 @@
+// app/(tabs)/goal-chat.tsx
+
 import React, { useState } from 'react';
-import { useColorScheme } from 'react-native';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
-import { sendMessageToGPT } from '../src/services/openai';
+import { View, Text, TextInput, Button, ScrollView, StyleSheet } from 'react-native';
+import { sendMessageToGPT } from '../src/services/gpt';
 
 export default function GoalChatScreen() {
+    console.log('✅ GoalChatScreen rendering...');
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: "Hi there! What would you like to improve or focus on in your life right now? For example: better sleep, being more present with family, building a morning routine...",
+    },
+  ]);
+
+  console.log('✅ GoalChatScreen messages:', messages);
+
   const [input, setInput] = useState('');
-  const [response, setResponse] = useState('');
-  const [loading, setLoading] = useState(false);
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const [isLoading, setIsLoading] = useState(false);
+  const [confirmedGoals, setConfirmedGoals] = useState([]); // [{ topic: string, habit: string }]
+  const [currentTopic, setCurrentTopic] = useState<string | null>(null);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+
+  const detectConfirmedGoal = (text: string): { topic: string; habit: string } | null => {
+    console.log('✅ Detecting confirmed goal in text:', text);
+    const match = text.match(/\*\*Your new habit\*\*:.*\n\u2192\s*(.*)/);
+    if (match && currentTopic) {
+        console.log('✅ Confirmed goal detected:', match[1]);
+      return { topic: currentTopic, habit: match[1].trim() };
+    }
+    console.log('❌ No confirmed goal detected');
+    return null;
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    console.log('✅ Sending message:', input);
+    const newMessages = [...messages, { role: 'user', content: input }];
+    setMessages(newMessages);
+    setInput('');
+    setIsLoading(true);
 
-    console.log('🧠 Prompting GPT with:', input);
-    setLoading(true);
-    const result = await sendMessageToGPT(input);
-    console.log('🤖 GPT replied:', result);
-    setResponse(result);
-    setLoading(false);
+    try {
+      const response = await sendMessageToGPT({
+        userMessages: newMessages,
+        confirmedGoals,
+        currentTopic: currentTopic ?? undefined,
+        awaitingConfirmation,
+      });
+      console.log('✅ GPT response:', response);
+      const detected = detectConfirmedGoal(response);
+      if (detected) {
+        console.log('✅ Confirmed goal detected:', detected);
+        setConfirmedGoals([...confirmedGoals, detected]);
+        console.log('✅ Updated confirmed goals:', [...confirmedGoals, detected]);
+        setCurrentTopic(null); // Reset or move to next topic if available
+        setAwaitingConfirmation(false);
+      }
+      console.log('✅ Setting response:', response);
+      setMessages([...newMessages, { role: 'assistant', content: response }]);
+    } catch (error) {
+      setMessages([...newMessages, { role: 'assistant', content: "Oops! Something went wrong. Please try again." }]);
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>🎯 Goal Framing Test Chat</Text>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {messages.map((msg, idx) => (
+          <Text
+            key={idx}
+            style={msg.role === 'user' ? styles.userMessage : styles.assistantMessage}>
+            {msg.content}
+          </Text>
+        ))}
+      </ScrollView>
 
-      <TextInput
-  style={[
-    styles.input,
-    { backgroundColor: isDark ? '#1c1c1e' : '#fff', color: isDark ? '#fff' : '#000' },
-  ]}
-  placeholder="What would you like to improve, change, or focus on in your life?"
-  placeholderTextColor={isDark ? '#888' : '#aaa'}
-  value={input}
-  onChangeText={setInput}
-  editable={!loading}
-/>
-
-      <Button title={loading ? 'Thinking...' : 'Send'} onPress={handleSend} disabled={loading} />
-
-      {response !== '' && (
-        <View style={styles.responseBox}>
-          <Text style={styles.responseLabel}>Response:</Text>
-          <Text style={styles.responseText}>{response}</Text>
-        </View>
-      )}
-    </ScrollView>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="What would you like to improve or change?"
+          placeholderTextColor="#aaa"
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={handleSend}
+        />
+        <Button title={isLoading ? '...' : 'Send'} onPress={handleSend} disabled={isLoading} />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingTop: 60 },
-  heading: { fontSize: 22, fontWeight: '600', marginBottom: 20 },
+  container: {
+    flex: 1,
+    paddingTop: 50,
+    backgroundColor: '#fff',
+  },
+  scrollContainer: {
+    padding: 20,
+  },
+  userMessage: {
+    textAlign: 'right',
+    marginVertical: 5,
+    color: '#333',
+    backgroundColor: '#e3f2fd',
+    padding: 10,
+    borderRadius: 8,
+  },
+  assistantMessage: {
+    textAlign: 'left',
+    marginVertical: 5,
+    color: '#333',
+    backgroundColor: '#f1f1f1',
+    padding: 10,
+    borderRadius: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    borderTopWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 12,
+    flex: 1,
+    padding: 10,
+    backgroundColor: '#f9f9f9',
     borderRadius: 8,
-    marginBottom: 10,
-    fontSize: 16,
+    marginRight: 10,
+    color: '#000',
   },
-  responseBox: {
-    marginTop: 20,
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    borderRadius: 8,
-  },
-  responseLabel: { fontWeight: 'bold', marginBottom: 6 },
-  responseText: { fontSize: 16 },
 });
